@@ -1,0 +1,71 @@
+
+
+Introduction to Q-Learning:
+
+Q-learning is a model-free reinforcement learning technique. Specifically,  -learning can be used to find an optimal action-selection policy for any given (finite) Markov decision process (MDP). It works by learning an action-value function that ultimately gives the expected utility of taking a given action in a given state and following the optimal policy thereafter. A policy is a rule that the agent follows in selecting actions, given the state it is in. When such an action-value function is learned, the optimal policy can be constructed by simply selecting the action with the highest value in each state. One of the strengths of  -learning is that it is able to compare the expected utility of the available actions without requiring a model of the environment. Additionally,  -learning can handle problems with stochastic transitions and rewards, without requiring any adaptations. It has been proven that for any finite MDP,  -learning eventually finds an optimal policy, in the sense that the expected value of the total reward return over all successive steps, starting from the current state, is the maximum achievable. The task of the project was to implement the Q-function of Q-learning algorithm using simple perceptron. 
+
+The Q-function is: 
+https://upload.wikimedia.org/math/5/2/4/524fe99e01b50c2d0b3268cf418b6890.png
+ 
+
+Where   is the reward observed after performing   in  , and where    ( ) is the learning rate (may be the same for all pairs).
+
+An episode of the algorithm ends when state   is a final state (or, "absorbing state"). However,  -learning can also learn in non-episodic tasks. If the discount factor is lower than 1, the action values are finite even if the problem can contain infinite loops.
+
+Agent World Description:
+
+The agent world is like a board having borders on all four sides and one or more agents playing in it. The goal of each agent playing in the agent world is to maximize the reward at the end of each game. There are vegetables in the world which can be harvested by the agents, and on harvesting a vegetable the agent will earn some positive reward. There is a life span of each vegetable, so if in a given time the vegetable is not harvested, it will die and reproduced at a new position. Once a vegetable is consumed it will also be reproduced. There are minerals/rocks in the agent world, on hitting them the player will be penalized. On hitting a mineral, the player will transfer some energy to the mineral making it move in the world. When a player hits a moving mineral, it will be awarded 
+
+larger penalty. There are parameters available to set the number of vegetables and minerals in the agent world. 
+
+
+Implementation:
+
+For this project, I implemented the above Q-function using simple perceptron (without any hidden units). The goal was to train a set of perceptrons such that they predict the best next step to be taken in the agent world such that it would maximize the total reward. I trained totally 36 perceptrons (=number of sensors) to predict the Q-value in each sensor direction. Then a step in agent world was taken in the direction of the perceptron predicting maximum Q-value. The number of input units in each perceptron was 104 (which is number of sensors * 4). 
+
+For first set of 36 inputs:
+inputs [i] = 109/ (13*distance) ; if the ith sensor sees a wall in ith direction else 0. Here distance is the distance to the wall from ith direction.
+
+For next set of 36 inputs:
+inputs [36 + i] = 109/ (13*distance) ; if the ith sensor sees a vegetable in ith direction else 0. Here distance is the distance to the vegetable from ith direction.
+
+For next set of 36 inputs:
+inputs [36*2 + i] = 109/ (13*distance) ; if the ith sensor sees another player in ith direction else 0. Here distance is the distance to another player from ith direction.
+
+For next set of 36 inputs:
+inputs [36*3 + i] = 109/ (13*distance) ; if the ith sensor sees a mineral in ith direction else 0. Here distance is the distance to the mineral from ith direction.
+
+The constant terms in calculating inputs were added to normalize the inputs. The sensor output range is [13,109]. The normalization helped training the ANN faster. If the sensor doesn’t see particular item in its scope, then the input was set to 0 (minimum value). 
+
+After getting all the inputs from sensors, they were passed to all the ANNs. All the ANNs predicted the Q-value using feed forwarding the inputs. Then, a step was taken in the direction of the ANN which predicted the maximum Q-value. Then again the inputs were computed and new Q-values were calculated. Using the maximum of these new Q-values, the older ANN using which a step was taken in agent world was trained by backpropagation technique using the error calculated by taking difference between the Q-formula and predicted value. 
+
+For training the perceptron, learning rate was set to 0.2 and for training perceptrons using the Q-function formula the gamma value of 0.5 was used. The initial weights for all the perceptrons were set to 0.3. 
+
+For training the ANNs initially to learn predicting Q-value as close as the Q-function output, I had to train them to recognize the difference between all the objects present in the agent world, i.e. vegetables, other players, wall and minerals. The difference between all these objects was the reward agent gets on hitting/consuming them. If the agent directly jumps into the agent world then it would be very difficult to train it. So, I used widely known exploitation vs exploration concept. First I trained the ANNs to learn not to hit the wall. This was done by taking random steps in a barren world. Then I added vegetables in the barren world, and trained the agent who has learnt not hitting walls. Then I followed the same process for training the agent for not hitting other players and minerals. For this exploration part, few hundred steps in random directions were chosen for taking next step in agent world and corresponding ANN of that direction was trained by backpropagation technique.
+
+Training process:
+1.	Predict Q-values by all the ANNs
+2.	Take a step in agent world in the direction of ANN predicted maximum Q-value and the environment will give the reward for taking the step -> reward, Qmax
+3.	Predict Q-values by all the ANNs with new inputs
+Find maximum of the Q-values -> Q’  
+4.	From the formula of Q-function: 
+Qold  =  Reward_for_going_from_Qold_to_Qnew    +   gamma * Qnew
+
+Compute the value of Q using this formula and find the error comparing this value with the Qmax found in step-2. Backpropagate this error and train the ANN which predicted Qmax.
+
+I also added code to write and read the trained weights to a file on disk once all the ANNs are trained so that when starting the game again in future, the weights saved on that file can be read to avoid the time consuming training task again. 
+
+While training, I was facing a problem adjusting weights correctly, after taking few hundred steps in the agent world, weights were approaching -INF or +INF. The reason for this could be explained with the Q-function. In Q-function, we use the new Q value to train the old ANN. If new Q value is higher than the old one, then the backpropagation will try to adjust weights such that with same inputs they will predict higher Q-value. This will make the agent keep taking steps in same direction (as it will keep predicting higher values). To overcome this issue, means for restraining 
+the values predicted while training the perceptron (i.e. backpropagating the error), 
+
+I used Rectified Linear Unit (ReLU):
+Min (Max (predicted_value [i], -3), 5)
+
+The minimum value that this function would output is -3, while the maximum value would be 5. I chose 5 to be the maximum value, because the reward agent receives on consuming vegetable is 5 which is the maximum possible positive reward. -3 is the minimum possible penalty for bumping into another player. After predicting the reward, for backpropagating the error, this value was used to find the error. 
+
+The output unit has a linear activation function which is the sum of all the inputs to the unit. In case of simple perceptron, there is no hidden layer between input units and output unit as shown in below figure. So, the inputs to the output unit are w0, w1 * x1, w2 * x2 … 
+
+
+Summary:
+The Q-learning formula I implemented using a simple perceptron was able to predict the next step to be taken in the agent world pretty accurately. It was able to take a decision between all the possible scenarios that are possible in the agent world. I observed that the agent was able to accurately take a step in between two minerals to harvest a vegetable. I faced a number of challenges for training the agent to learn understanding between earning some positive reward and avoid hitting wall, minerals and other players. The very first challenge was to select the features to be given as an input to the ANN. In the beginning, I was providing very few number of features which were not sufficient to learn playing in the agent world. So I kept adding more features and found a perfect set of features to be given as an input to the ANN which was the distances of all the objects in all the directions of the sensors. After this, I faced problem adjusting the weights properly as they were approaching infinity which I solved using the rectified linear unit. The output of this unit was used to train the ANN. By restricting the output of the output unit, I was able to train the ANNs successfully in a step-by-step fashion. First I trained the ANNs to learn not hitting the wall as the agent will have to pay penalty on hitting a wall. Then with these trained weights, I trained the agent to harvest vegetables to earn rewards. Then, I trained it to learn not hitting other players and minerals which will all cost penalty to the agent. This step-by-step training was done with the exploration technique by taking random steps in the agent world. Once trained, the trained ANNs were used to predict the next step to be taken in the agent world.
+
